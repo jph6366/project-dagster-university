@@ -10,12 +10,13 @@ import os
 
 from dagster_essentials.assets import constants
 from dagster._utils.backoff import backoff
+from dagster_duckdb import DuckDBResource
 
 
 @asset(
     deps=["taxi_trips","taxi_zones"],
 )
-def manhattan_stats() -> None:
+def manhattan_stats(database: DuckDBResource) -> None:
     query = """
         select
             zones.zone,
@@ -27,8 +28,8 @@ def manhattan_stats() -> None:
         where borough = 'Manhattan' and geometry is not null
         group by zone, borough, geometry
     """
-    conn = duckdb.connect(os.getenv("DUCKDB_DATABASE"))
-    trips_by_zone = conn.execute(query).fetch_df()
+    with database.get_connection() as conn:
+        trips_by_zone = conn.execute(query).fetch_df()
 
     trips_by_zone["geometry"] = gpd.GeoSeries.from_wkt(trips_by_zone["geometry"])
     trips_by_zone = gpd.GeoDataFrame(trips_by_zone)
@@ -57,44 +58,37 @@ def manhattan_map() -> None:
 @asset(
     deps=["taxi_trips"]
 )
-def trips_by_week() -> None:
-    conn = backoff(
-        fn=duckdb.connect,
-        retry_on=(RuntimeError, duckdb.IOException),
-        kwargs={
-            "database": os.getenv("DUCKDB_DATABASE"),
-        },
-        max_retries=10,
-    )
+def trips_by_week(database: DuckDBResource) -> None:
+    with database.get_connection() as conn:
+        
+        current_date = datetime.strptime("2023-03-01", constants.DATE_FORMAT)
+        end_date = datetime.strptime("2023-04-01", constants.DATE_FORMAT)
 
-    current_date = datetime.strptime("2023-03-01", constants.DATE_FORMAT)
-    end_date = datetime.strptime("2023-04-01", constants.DATE_FORMAT)
+        result = pd.DataFrame()
 
-    result = pd.DataFrame()
+        while current_date < end_date:
+            current_date_str = current_date.strftime(constants.DATE_FORMAT)
+            query = f"""
+                select
+                    vendor_id, total_amount, trip_distance, passenger_count
+                from trips
+                where date_trunc('week', pickup_datetime) = date_trunc('week', '{current_date_str}'::date)
+            """
 
-    while current_date < end_date:
-        current_date_str = current_date.strftime(constants.DATE_FORMAT)
-        query = f"""
-            select
-                vendor_id, total_amount, trip_distance, passenger_count
-            from trips
-            where date_trunc('week', pickup_datetime) = date_trunc('week', '{current_date_str}'::date)
-        """
+            data_for_week = conn.execute(query).fetch_df()
 
-        data_for_week = conn.execute(query).fetch_df()
+            aggregate = data_for_week.agg({
+                "vendor_id": "count",
+                "total_amount": "sum",
+                "trip_distance": "sum",
+                "passenger_count": "sum"
+            }).rename({"vendor_id": "num_trips"}).to_frame().T # type: ignore
 
-        aggregate = data_for_week.agg({
-            "vendor_id": "count",
-            "total_amount": "sum",
-            "trip_distance": "sum",
-            "passenger_count": "sum"
-        }).rename({"vendor_id": "num_trips"}).to_frame().T # type: ignore
+            aggregate["period"] = current_date
 
-        aggregate["period"] = current_date
+            result = pd.concat([result, aggregate])
 
-        result = pd.concat([result, aggregate])
-
-        current_date += timedelta(days=7)
+            current_date += timedelta(days=7)
 
     # clean up the formatting of the dataframe
     result['num_trips'] = result['num_trips'].astype(int)
