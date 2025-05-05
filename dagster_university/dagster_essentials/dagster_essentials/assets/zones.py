@@ -2,14 +2,18 @@ import os
 import requests
 
 import duckdb
+import pandas as pd
 from dagster_essentials.assets import constants
 from dagster._utils.backoff import backoff
 from dagster_duckdb import DuckDBResource
 
-from dagster import asset
+from dagster import asset, MaterializeResult, MetadataValue
 
-@asset
-def taxi_zones_file() -> None:
+@asset(
+    description="The raw CSV file for the taxi zones dataset. Sourced from the NYC Open Data portal.",
+    group_name="raw_files",
+)
+def taxi_zones_file() -> MaterializeResult:
     """
         the raw csv file for the taxi zones dataset
     """
@@ -19,9 +23,16 @@ def taxi_zones_file() -> None:
 
     with open(constants.TAXI_ZONES_FILE_PATH, "wb") as output_file:
         output_file.write(raw_zones.content)
+    num_rows = len(pd.read_csv(constants.TAXI_ZONES_FILE_PATH))
+    return MaterializeResult(
+        metadata={
+            'Number of records': MetadataValue.int(num_rows)
+        }
+    )
 
 @asset(
-        deps=["taxi_zones_file"]
+    deps=["taxi_zones_file"],
+    group_name="ingested",
 )
 def taxi_zones(database: DuckDBResource) -> None:
     """

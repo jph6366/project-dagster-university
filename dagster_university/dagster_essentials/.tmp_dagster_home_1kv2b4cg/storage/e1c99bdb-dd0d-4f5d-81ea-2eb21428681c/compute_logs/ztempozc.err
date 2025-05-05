@@ -1,0 +1,26 @@
+[32m2025-04-28 16:50:06 -0400[0m - dagster - [34mDEBUG[0m - __ASSET_JOB - e1c99bdb-dd0d-4f5d-81ea-2eb21428681c - 97713 - LOGS_CAPTURED - Started capturing logs in process (pid: 97713).
+[32m2025-04-28 16:50:06 -0400[0m - dagster - [34mDEBUG[0m - __ASSET_JOB - e1c99bdb-dd0d-4f5d-81ea-2eb21428681c - 97713 - adhoc_request - STEP_START - Started execution of step "adhoc_request".
+[32m2025-04-28 16:50:06 -0400[0m - dagster - [34mERROR[0m - [31m__ASSET_JOB - e1c99bdb-dd0d-4f5d-81ea-2eb21428681c - 97713 - adhoc_request - STEP_FAILURE - Execution of step "adhoc_request" failed.
+
+dagster._core.errors.DagsterExecutionStepExecutionError: Error occurred while executing op "adhoc_request"::
+
+duckdb.duckdb.ConversionException: Conversion Error: timestamp field value out of range: "", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
+LINE 17:             where pickup_datetime >= ''
+                                              ^
+
+Stack Trace:
+  File "/home/jphardee/miniconda3/lib/python3.12/site-packages/dagster/_core/execution/plan/utils.py", line 56, in op_execution_error_boundary
+    yield
+  File "/home/jphardee/miniconda3/lib/python3.12/site-packages/dagster/_utils/__init__.py", line 391, in iterate_with_context
+    next_output = next(iterator)
+                  ^^^^^^^^^^^^^^
+  File "/home/jphardee/miniconda3/lib/python3.12/site-packages/dagster/_core/execution/plan/compute_generator.py", line 129, in _coerce_op_compute_fn_to_iterator
+    result = invoke_compute_fn(
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/jphardee/miniconda3/lib/python3.12/site-packages/dagster/_core/execution/plan/compute_generator.py", line 117, in invoke_compute_fn
+    return fn(context, **args_to_pass) if context_arg_provided else fn(**args_to_pass)
+                                                                    ^^^^^^^^^^^^^^^^^^
+  File "/home/jphardee/Desktop/NEETCODE/DAGSTER/project-dagster-university/dagster_university/dagster_essentials/dagster_essentials/assets/requests.py", line 51, in adhoc_request
+    results = conn.execute(query).fetch_df()
+              ^^^^^^^^^^^^^^^^^^^
+[0m
